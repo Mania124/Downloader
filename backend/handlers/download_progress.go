@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ func DownloadWithProgress(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 
 	var args []string
-	outputPath := "%(title)s.%(ext)s"
+	outputPath := filepath.Join(utils.GetDownloadFolder(), "%(title)s.%(ext)s")
 
 	if format == "audio" {
 		args = []string{
@@ -39,12 +40,13 @@ func DownloadWithProgress(c *gin.Context) {
 		}
 	} else {
 		args = []string{
-			"-f", "bestvideo+bestaudio/best",
+			"-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best",
 			"--no-playlist", "--prefer-free-formats",
 			"-o", outputPath,
 			"--progress-template", "download:%(progress._percent_str)s (%(progress.eta)s remaining)",
 			url,
 		}
+
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
