@@ -107,7 +107,8 @@ go build -o downloader
 ## Requirements
 
 - Go 1.21+
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) installed and in `$PATH`
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) installed and in `$PATH` (Check in [installation guide](how_to_download_yt-dlp.md))
+- [ffmep](https://www.gyan.dev/ffmpeg/builds/) installed (Check in [installation guide](ffmpeg_installation.md))
 
 ---
 
