@@ -1,9 +1,13 @@
 package handlers
 
 import (
+	"context"
+	"downloader/utils"
 	"encoding/json"
+	"log"
 	"net/http"
 	"os/exec"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,14 +18,18 @@ type ThumbnailRequest struct {
 
 func GetThumbnail(c *gin.Context) {
 	var req ThumbnailRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.URL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request or missing URL"})
+	if err := c.ShouldBindJSON(&req); err != nil || !utils.IsValidURL(req.URL) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or missing URL"})
 		return
 	}
 
-	cmd := exec.Command("yt-dlp", "-J", req.URL)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "yt-dlp", "-J", req.URL)
 	output, err := cmd.Output()
 	if err != nil {
+		log.Printf("yt-dlp error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch video info"})
 		return
 	}

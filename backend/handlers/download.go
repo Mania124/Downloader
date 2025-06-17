@@ -1,25 +1,28 @@
 package handlers
 
 import (
+	"context"
 	"downloader/utils"
 	"fmt"
+	"log"
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 type DownloadRequest struct {
 	URL        string `json:"url"`
-	Format     string `json:"format"`     // "video" or "audio"
-	Resolution string `json:"resolution"` // optional
+	Format     string `json:"format"`
+	Resolution string `json:"resolution"`
 }
 
 func DownloadVideo(c *gin.Context) {
 	var req DownloadRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.URL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request or missing URL"})
+	if err := c.ShouldBindJSON(&req); err != nil || !utils.IsValidURL(req.URL) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request or URL"})
 		return
 	}
 
@@ -50,12 +53,16 @@ func DownloadVideo(c *gin.Context) {
 		}
 	}
 
-	cmd := exec.Command("yt-dlp", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": string(output)})
+		log.Printf("yt-dlp error: %v\nOutput: %s", err, output)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Download failed"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Download completed", "log": string(output)})
+	c.JSON(http.StatusOK, gin.H{"message": "Download completed"})
 }

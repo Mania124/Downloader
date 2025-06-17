@@ -2,18 +2,21 @@ package handlers
 
 import (
 	"bufio"
+	"context"
+	"downloader/utils"
 	"fmt"
 	"net/http"
 	"os/exec"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 func DownloadWithProgress(c *gin.Context) {
 	url := c.Query("url")
-	format := c.Query("format") // video or audio
+	format := c.Query("format")
 
-	if url == "" || (format != "video" && format != "audio") {
+	if url == "" || !utils.IsValidURL(url) || (format != "video" && format != "audio") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing or invalid url/format"})
 		return
 	}
@@ -44,7 +47,10 @@ func DownloadWithProgress(c *gin.Context) {
 		}
 	}
 
-	cmd := exec.Command("yt-dlp", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start process"})
@@ -60,8 +66,9 @@ func DownloadWithProgress(c *gin.Context) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if len(line) > 0 {
-			c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", line))
-			c.Writer.Flush()
+			if _, err := c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", line)); err == nil {
+				c.Writer.Flush()
+			}
 		}
 	}
 

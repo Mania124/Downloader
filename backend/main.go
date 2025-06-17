@@ -16,7 +16,7 @@ func main() {
 	downloadFolder := utils.GetDownloadFolder()
 	if _, err := os.Stat(downloadFolder); os.IsNotExist(err) {
 		if err := os.MkdirAll(downloadFolder, os.ModePerm); err != nil {
-			log.Fatalf("Failed to create download folder: %v", err)
+			log.Printf("Failed to create download folder: %v\n", err)
 		}
 	}
 
