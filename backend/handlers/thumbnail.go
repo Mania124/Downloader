@@ -16,6 +16,11 @@ type ThumbnailRequest struct {
 	URL string `json:"url"`
 }
 
+var YTDLPCommand = func(ctx context.Context, url string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "yt-dlp", "-J", url)
+	return cmd.Output()
+}
+
 func GetThumbnail(c *gin.Context) {
 	var req ThumbnailRequest
 	if err := c.ShouldBindJSON(&req); err != nil || !utils.IsValidURL(req.URL) {
@@ -26,8 +31,7 @@ func GetThumbnail(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "yt-dlp", "-J", req.URL)
-	output, err := cmd.Output()
+	output, err := YTDLPCommand(ctx, req.URL)
 	if err != nil {
 		log.Printf("yt-dlp error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch video info"})
