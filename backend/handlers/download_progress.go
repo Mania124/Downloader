@@ -16,6 +16,8 @@ import (
 func DownloadWithProgress(c *gin.Context) {
 	url := c.Query("url")
 	format := c.Query("format")
+	resolution := c.Query("resolution")
+	videoFormat := c.Query("videoFormat")
 
 	if url == "" || !utils.IsValidURL(url) || (format != "video" && format != "audio") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing or invalid url/format"})
@@ -26,8 +28,12 @@ func DownloadWithProgress(c *gin.Context) {
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 
+	// Get list of files before download to identify new files
+	downloadFolder := utils.GetDownloadFolder()
+	beforeFiles, _ := utils.GetFileList(downloadFolder)
+
 	var args []string
-	outputPath := filepath.Join(utils.GetDownloadFolder(), "%(title)s.%(ext)s")
+	outputPath := filepath.Join(downloadFolder, "%(title)s.%(ext)s")
 
 	if format == "audio" {
 		args = []string{
@@ -39,17 +45,17 @@ func DownloadWithProgress(c *gin.Context) {
 			url,
 		}
 	} else {
+		format := utils.BuildVideoFormat(resolution, videoFormat)
 		args = []string{
-			"-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best",
+			"-f", format,
 			"--no-playlist", "--prefer-free-formats",
 			"-o", outputPath,
 			"--progress-template", "download:%(progress._percent_str)s (%(progress.eta)s remaining)",
 			url,
 		}
-
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
@@ -75,6 +81,19 @@ func DownloadWithProgress(c *gin.Context) {
 	}
 
 	cmd.Wait()
+
+	// Get list of files after download to identify the new file
+	afterFiles, err := utils.GetFileList(downloadFolder)
+	if err == nil {
+		// Find the newly downloaded file
+		newFiles := utils.FindNewFiles(beforeFiles, afterFiles)
+		if len(newFiles) > 0 {
+			downloadedFile := newFiles[0]
+			c.Writer.WriteString(fmt.Sprintf("event: file\ndata: {\"filename\":\"%s\",\"downloadUrl\":\"/files/%s\"}\n\n", downloadedFile, downloadedFile))
+			c.Writer.Flush()
+		}
+	}
+
 	c.Writer.WriteString("event: done\ndata: completed\n\n")
 	c.Writer.Flush()
 }
