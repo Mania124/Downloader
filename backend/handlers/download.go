@@ -16,9 +16,10 @@ import (
 )
 
 type DownloadRequest struct {
-	URL        string `json:"url"`
-	Format     string `json:"format"`
-	Resolution string `json:"resolution"`
+	URL         string `json:"url"`
+	Format      string `json:"format"`      // "video" or "audio"
+	Resolution  string `json:"resolution"`  // "360", "480", "720", "1080"
+	VideoFormat string `json:"videoFormat"` // "mp4", "webm", "mkv", "avi", "best"
 }
 
 func DownloadVideo(c *gin.Context) {
@@ -51,10 +52,7 @@ func DownloadVideo(c *gin.Context) {
 			"-o", outputPath, req.URL,
 		}
 	} else {
-		format := "bestvideo+bestaudio/best"
-		if req.Resolution != "" {
-			format = fmt.Sprintf("bestvideo[height<=%s]+bestaudio/best", req.Resolution)
-		}
+		format := utils.BuildVideoFormat(req.Resolution, req.VideoFormat)
 		args = []string{
 			"-f", format,
 			"--no-playlist", "--prefer-free-formats",
@@ -62,7 +60,7 @@ func DownloadVideo(c *gin.Context) {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)

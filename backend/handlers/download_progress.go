@@ -16,6 +16,8 @@ import (
 func DownloadWithProgress(c *gin.Context) {
 	url := c.Query("url")
 	format := c.Query("format")
+	resolution := c.Query("resolution")
+	videoFormat := c.Query("videoFormat")
 
 	if url == "" || !utils.IsValidURL(url) || (format != "video" && format != "audio") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing or invalid url/format"})
@@ -43,17 +45,17 @@ func DownloadWithProgress(c *gin.Context) {
 			url,
 		}
 	} else {
+		format := utils.BuildVideoFormat(resolution, videoFormat)
 		args = []string{
-			"-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best",
+			"-f", format,
 			"--no-playlist", "--prefer-free-formats",
 			"-o", outputPath,
 			"--progress-template", "download:%(progress._percent_str)s (%(progress.eta)s remaining)",
 			url,
 		}
-
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)

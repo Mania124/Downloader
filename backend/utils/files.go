@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,9 +53,9 @@ func FindNewFiles(before, after []string) []string {
 func GetFileType(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
-	case ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm":
+	case ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".3gp", ".ogv":
 		return "video"
-	case ".mp3", ".wav", ".flac", ".aac", ".ogg":
+	case ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma":
 		return "audio"
 	default:
 		return "unknown"
@@ -65,30 +66,36 @@ func GetFileType(filename string) string {
 func GetContentType(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
-	case ".mp4":
+	case ".mp4", ".m4v":
 		return "video/mp4"
 	case ".avi":
-		return "video/avi"
+		return "video/x-msvideo"
 	case ".mkv":
-		return "video/mkv"
+		return "video/x-matroska"
 	case ".mov":
-		return "video/mov"
+		return "video/quicktime"
 	case ".wmv":
-		return "video/wmv"
+		return "video/x-ms-wmv"
 	case ".flv":
-		return "video/flv"
+		return "video/x-flv"
 	case ".webm":
 		return "video/webm"
+	case ".3gp":
+		return "video/3gpp"
+	case ".ogv":
+		return "video/ogg"
 	case ".mp3":
-		return "audio/mp3"
+		return "audio/mpeg"
 	case ".wav":
 		return "audio/wav"
 	case ".flac":
 		return "audio/flac"
-	case ".aac":
+	case ".aac", ".m4a":
 		return "audio/aac"
 	case ".ogg":
 		return "audio/ogg"
+	case ".wma":
+		return "audio/x-ms-wma"
 	default:
 		return "application/octet-stream"
 	}
@@ -138,4 +145,65 @@ func CleanupOldFiles(downloadFolder string, maxAge time.Duration) error {
 		}
 	}
 	return nil
+}
+
+// BuildVideoFormat constructs the yt-dlp format string based on resolution and video format preferences
+func BuildVideoFormat(resolution, videoFormat string) string {
+	// Default format preferences
+	var formatSelectors []string
+
+	// Handle video format preference
+	var extFilter string
+	switch videoFormat {
+	case "mp4":
+		extFilter = "[ext=mp4]"
+	case "webm":
+		extFilter = "[ext=webm]"
+	case "mkv":
+		extFilter = "[ext=mkv]"
+	case "avi":
+		extFilter = "[ext=avi]"
+	case "mov":
+		extFilter = "[ext=mov]"
+	case "flv":
+		extFilter = "[ext=flv]"
+	case "3gp":
+		extFilter = "[ext=3gp]"
+	default:
+		extFilter = "" // No extension filter, let yt-dlp choose best
+	}
+
+	// Handle resolution preference
+	var heightFilter string
+	if resolution != "" {
+		heightFilter = fmt.Sprintf("[height<=%s]", resolution)
+	}
+
+	// Build format string with preferences
+	if resolution != "" && videoFormat != "" && videoFormat != "best" {
+		// Specific resolution and format - prioritize exact match
+		formatSelectors = append(formatSelectors,
+			fmt.Sprintf("bestvideo%s%s+bestaudio/best%s%s", heightFilter, extFilter, heightFilter, extFilter),
+			fmt.Sprintf("bestvideo%s+bestaudio/best%s", heightFilter, heightFilter),
+		)
+	} else if resolution != "" {
+		// Specific resolution, any format
+		formatSelectors = append(formatSelectors,
+			fmt.Sprintf("bestvideo%s+bestaudio/best%s", heightFilter, heightFilter),
+		)
+	} else if videoFormat != "" && videoFormat != "best" {
+		// Specific format, any resolution - prioritize format
+		formatSelectors = append(formatSelectors,
+			fmt.Sprintf("bestvideo%s+bestaudio/best%s", extFilter, extFilter),
+		)
+	} else {
+		// Default: best quality available
+		formatSelectors = append(formatSelectors, "bestvideo+bestaudio/best")
+	}
+
+	// Return the first (most preferred) format selector, or default if none
+	if len(formatSelectors) > 0 {
+		return formatSelectors[0]
+	}
+	return "bestvideo+bestaudio/best"
 }
