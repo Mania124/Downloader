@@ -7,9 +7,11 @@ This is a production-hardened backend API for downloading YouTube videos or audi
 
 ## Features
 
-- ✅ **Download Video or Audio** in specified formats
+- ✅ **Download Video or Audio** in specified formats with file information returned
 - ✅ **Fetch Thumbnail** of any valid YouTube video
 - ✅ **Stream Download Progress** to clients via Server-Sent Events (SSE)
+- ✅ **List Downloaded Files** with metadata and download URLs
+- ✅ **Serve Downloaded Files** with proper streaming and content headers
 - ✅ **Health Check Endpoint**
 - ✅ Production-ready with input validation, context timeouts, and error handling
 - ✅ CORS-configurable via environment variable
@@ -48,7 +50,10 @@ POST /download
 **Response:**
 ```json
 {
-  "message": "Download completed"
+  "message": "Download completed",
+  "filename": "video.mp4",
+  "size": 12345678,
+  "downloadUrl": "/files/video.mp4"
 }
 ```
 
@@ -77,7 +82,37 @@ POST /thumbnail
 ```http
 GET /download/stream?url=<VIDEO_URL>&format=video|audio
 ```
-**Response:** Stream of download progress via SSE.
+**Response:** Stream of download progress via SSE. When complete, includes file information.
+
+---
+
+### List Downloaded Files
+```http
+GET /files
+```
+**Response:**
+```json
+{
+  "files": [
+    {
+      "name": "video.mp4",
+      "size": 12345678,
+      "modTime": "2025-07-10T16:30:00Z",
+      "downloadUrl": "/files/video.mp4",
+      "type": "video"
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+### Download File
+```http
+GET /files/{filename}
+```
+**Response:** Streams the requested file with appropriate headers for download.
 
 ---
 

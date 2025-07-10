@@ -4,8 +4,10 @@ import (
 	"context"
 	"downloader/utils"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
@@ -31,7 +33,14 @@ func DownloadVideo(c *gin.Context) {
 		return
 	}
 
-	outputPath := filepath.Join(utils.GetDownloadFolder(), "%(title)s.%(ext)s")
+	// Get list of files before download to identify new files
+	downloadFolder := utils.GetDownloadFolder()
+	beforeFiles, err := utils.GetFileList(downloadFolder)
+	if err != nil {
+		log.Printf("Error getting file list before download: %v", err)
+	}
+
+	outputPath := filepath.Join(downloadFolder, "%(title)s.%(ext)s")
 	var args []string
 
 	if req.Format == "audio" {
@@ -64,5 +73,120 @@ func DownloadVideo(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Download completed"})
+	// Get list of files after download to identify the new file
+	afterFiles, err := utils.GetFileList(downloadFolder)
+	if err != nil {
+		log.Printf("Error getting file list after download: %v", err)
+		c.JSON(http.StatusOK, gin.H{"message": "Download completed"})
+		return
+	}
+
+	// Find the newly downloaded file
+	newFiles := utils.FindNewFiles(beforeFiles, afterFiles)
+	if len(newFiles) == 0 {
+		c.JSON(http.StatusOK, gin.H{"message": "Download completed"})
+		return
+	}
+
+	// Return information about the downloaded file
+	downloadedFile := newFiles[0] // Take the first new file
+	fileInfo, err := os.Stat(filepath.Join(downloadFolder, downloadedFile))
+	if err != nil {
+		log.Printf("Error getting file info: %v", err)
+		c.JSON(http.StatusOK, gin.H{"message": "Download completed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "Download completed",
+		"filename":    downloadedFile,
+		"size":        fileInfo.Size(),
+		"downloadUrl": fmt.Sprintf("/files/%s", downloadedFile),
+	})
+}
+
+// ServeFile serves a downloaded file to the client
+func ServeFile(c *gin.Context) {
+	filename := c.Param("filename")
+	if filename == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Filename is required"})
+		return
+	}
+
+	// Sanitize filename to prevent directory traversal
+	filename = filepath.Base(filename)
+	filePath := filepath.Join(utils.GetDownloadFolder(), filename)
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
+	// Open the file
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Printf("Error opening file %s: %v", filePath, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open file"})
+		return
+	}
+	defer file.Close()
+
+	// Get file info for content length
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Printf("Error getting file info %s: %v", filePath, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get file info"})
+		return
+	}
+
+	// Set appropriate headers
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Header("Content-Length", fmt.Sprintf("%d", fileInfo.Size()))
+
+	// Set content type based on file extension
+	c.Header("Content-Type", utils.GetContentType(filename))
+
+	// Stream the file to the client
+	_, err = io.Copy(c.Writer, file)
+	if err != nil {
+		log.Printf("Error streaming file %s: %v", filePath, err)
+		return
+	}
+}
+
+// ListFiles returns a list of all downloaded files
+func ListFiles(c *gin.Context) {
+	downloadFolder := utils.GetDownloadFolder()
+
+	// Read directory contents
+	entries, err := os.ReadDir(downloadFolder)
+	if err != nil {
+		log.Printf("Error reading download folder: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read download folder"})
+		return
+	}
+
+	var files []utils.FileInfo
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue // Skip directories
+		}
+
+		// Create file info using utility function
+		fileInfo, err := utils.CreateFileInfo(entry.Name(), downloadFolder)
+		if err != nil {
+			log.Printf("Error getting file info for %s: %v", entry.Name(), err)
+			continue
+		}
+
+		files = append(files, *fileInfo)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"files": files,
+		"count": len(files),
+	})
 }

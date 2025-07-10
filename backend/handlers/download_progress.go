@@ -26,8 +26,12 @@ func DownloadWithProgress(c *gin.Context) {
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 
+	// Get list of files before download to identify new files
+	downloadFolder := utils.GetDownloadFolder()
+	beforeFiles, _ := utils.GetFileList(downloadFolder)
+
 	var args []string
-	outputPath := filepath.Join(utils.GetDownloadFolder(), "%(title)s.%(ext)s")
+	outputPath := filepath.Join(downloadFolder, "%(title)s.%(ext)s")
 
 	if format == "audio" {
 		args = []string{
@@ -75,6 +79,19 @@ func DownloadWithProgress(c *gin.Context) {
 	}
 
 	cmd.Wait()
+
+	// Get list of files after download to identify the new file
+	afterFiles, err := utils.GetFileList(downloadFolder)
+	if err == nil {
+		// Find the newly downloaded file
+		newFiles := utils.FindNewFiles(beforeFiles, afterFiles)
+		if len(newFiles) > 0 {
+			downloadedFile := newFiles[0]
+			c.Writer.WriteString(fmt.Sprintf("event: file\ndata: {\"filename\":\"%s\",\"downloadUrl\":\"/files/%s\"}\n\n", downloadedFile, downloadedFile))
+			c.Writer.Flush()
+		}
+	}
+
 	c.Writer.WriteString("event: done\ndata: completed\n\n")
 	c.Writer.Flush()
 }
