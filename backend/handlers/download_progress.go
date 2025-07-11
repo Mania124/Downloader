@@ -40,19 +40,29 @@ func DownloadWithProgress(c *gin.Context) {
 			"-f", "bestaudio/best",
 			"--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K",
 			"--no-playlist", "--prefer-free-formats",
+			"--embed-metadata", "--add-metadata",
 			"-o", outputPath,
 			"--progress-template", "download:%(progress._percent_str)s (%(progress.eta)s remaining)",
 			url,
 		}
 	} else {
-		format := utils.BuildVideoFormat(resolution, videoFormat)
+		formatStr := utils.BuildVideoFormat(resolution, videoFormat)
 		args = []string{
-			"-f", format,
+			"-f", formatStr,
 			"--no-playlist", "--prefer-free-formats",
+			"--embed-metadata", "--add-metadata",
+		}
+
+		// Add merge format only for specific formats
+		if videoFormat == "mp4" || videoFormat == "mkv" || videoFormat == "avi" {
+			args = append(args, "--merge-output-format", videoFormat)
+		}
+
+		args = append(args,
 			"-o", outputPath,
 			"--progress-template", "download:%(progress._percent_str)s (%(progress.eta)s remaining)",
 			url,
-		}
+		)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)

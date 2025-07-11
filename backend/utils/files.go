@@ -149,29 +149,8 @@ func CleanupOldFiles(downloadFolder string, maxAge time.Duration) error {
 
 // BuildVideoFormat constructs the yt-dlp format string based on resolution and video format preferences
 func BuildVideoFormat(resolution, videoFormat string) string {
-	// Default format preferences
-	var formatSelectors []string
-
-	// Handle video format preference
-	var extFilter string
-	switch videoFormat {
-	case "mp4":
-		extFilter = "[ext=mp4]"
-	case "webm":
-		extFilter = "[ext=webm]"
-	case "mkv":
-		extFilter = "[ext=mkv]"
-	case "avi":
-		extFilter = "[ext=avi]"
-	case "mov":
-		extFilter = "[ext=mov]"
-	case "flv":
-		extFilter = "[ext=flv]"
-	case "3gp":
-		extFilter = "[ext=3gp]"
-	default:
-		extFilter = "" // No extension filter, let yt-dlp choose best
-	}
+	// Handle video format preference with more specific selectors
+	var formatOptions []string
 
 	// Handle resolution preference
 	var heightFilter string
@@ -179,31 +158,57 @@ func BuildVideoFormat(resolution, videoFormat string) string {
 		heightFilter = fmt.Sprintf("[height<=%s]", resolution)
 	}
 
-	// Build format string with preferences
-	if resolution != "" && videoFormat != "" && videoFormat != "best" {
-		// Specific resolution and format - prioritize exact match
-		formatSelectors = append(formatSelectors,
-			fmt.Sprintf("bestvideo%s%s+bestaudio/best%s%s", heightFilter, extFilter, heightFilter, extFilter),
-			fmt.Sprintf("bestvideo%s+bestaudio/best%s", heightFilter, heightFilter),
-		)
-	} else if resolution != "" {
-		// Specific resolution, any format
-		formatSelectors = append(formatSelectors,
-			fmt.Sprintf("bestvideo%s+bestaudio/best%s", heightFilter, heightFilter),
-		)
-	} else if videoFormat != "" && videoFormat != "best" {
-		// Specific format, any resolution - prioritize format
-		formatSelectors = append(formatSelectors,
-			fmt.Sprintf("bestvideo%s+bestaudio/best%s", extFilter, extFilter),
-		)
-	} else {
-		// Default: best quality available
-		formatSelectors = append(formatSelectors, "bestvideo+bestaudio/best")
+	// Build format string based on preferences
+	switch videoFormat {
+	case "mp4":
+		if resolution != "" {
+			formatOptions = []string{
+				fmt.Sprintf("bestvideo[ext=mp4]%s+bestaudio[ext=m4a]/bestvideo[ext=mp4]%s+bestaudio/best[ext=mp4]%s", heightFilter, heightFilter, heightFilter),
+				fmt.Sprintf("bestvideo%s+bestaudio/best%s", heightFilter, heightFilter),
+			}
+		} else {
+			formatOptions = []string{
+				"bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/best[ext=mp4]",
+				"bestvideo+bestaudio/best",
+			}
+		}
+	case "webm":
+		if resolution != "" {
+			formatOptions = []string{
+				fmt.Sprintf("bestvideo[ext=webm]%s+bestaudio[ext=webm]/best[ext=webm]%s", heightFilter, heightFilter),
+				fmt.Sprintf("bestvideo%s+bestaudio/best%s", heightFilter, heightFilter),
+			}
+		} else {
+			formatOptions = []string{
+				"bestvideo[ext=webm]+bestaudio[ext=webm]/best[ext=webm]",
+				"bestvideo+bestaudio/best",
+			}
+		}
+	case "mkv":
+		if resolution != "" {
+			formatOptions = []string{
+				fmt.Sprintf("bestvideo[ext=mkv]%s+bestaudio/best[ext=mkv]%s", heightFilter, heightFilter),
+				fmt.Sprintf("bestvideo%s+bestaudio/best%s", heightFilter, heightFilter),
+			}
+		} else {
+			formatOptions = []string{
+				"bestvideo[ext=mkv]+bestaudio/best[ext=mkv]",
+				"bestvideo+bestaudio/best",
+			}
+		}
+	default:
+		// For other formats or "best", use general approach
+		if resolution != "" {
+			formatOptions = []string{
+				fmt.Sprintf("bestvideo%s+bestaudio/best%s", heightFilter, heightFilter),
+			}
+		} else {
+			formatOptions = []string{
+				"bestvideo+bestaudio/best",
+			}
+		}
 	}
 
-	// Return the first (most preferred) format selector, or default if none
-	if len(formatSelectors) > 0 {
-		return formatSelectors[0]
-	}
-	return "bestvideo+bestaudio/best"
+	// Join all options with fallbacks
+	return strings.Join(formatOptions, "/")
 }

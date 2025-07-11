@@ -49,15 +49,24 @@ func DownloadVideo(c *gin.Context) {
 			"-f", "bestaudio/best",
 			"--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K",
 			"--no-playlist", "--prefer-free-formats",
+			"--embed-metadata", "--add-metadata",
 			"-o", outputPath, req.URL,
 		}
 	} else {
 		format := utils.BuildVideoFormat(req.Resolution, req.VideoFormat)
+
 		args = []string{
 			"-f", format,
 			"--no-playlist", "--prefer-free-formats",
-			"-o", outputPath, req.URL,
+			"--embed-metadata", "--add-metadata",
 		}
+
+		// Add merge format only for specific formats
+		if req.VideoFormat == "mp4" || req.VideoFormat == "mkv" || req.VideoFormat == "avi" {
+			args = append(args, "--merge-output-format", req.VideoFormat)
+		}
+
+		args = append(args, "-o", outputPath, req.URL)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
